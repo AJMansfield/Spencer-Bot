@@ -19,9 +19,15 @@ class SpencerClient(discord.Client):
 
         assignments = await self.dal.get_assignments(reaction)
         async for assignment in assignments:
-            await self.dal.create_expiry(assignment, user, now + assignment.duration),
+            await self.dal.create_expiry(assignment, user, now + assignment.duration)
             await user.add_roles(discord.Object(assignment.role_id))
         
-    async def on_reaction_remove(self, reaction:discord.Reaction, user:Union[Member, User]):
-        # remove the role
-        # clear the role expiration entry
+    async def on_reaction_remove(self, reaction:Reaction, user:Union[Member, User]):
+        now = datetime.now()
+
+        assignments = await self.dal.get_assignments(reaction)
+        async for assignment in assignments:
+            await user.remove_roles(discord.Object(assignment.role_id))
+            await self.dal.complete_assignment_expiry(assignment, user)
+    
+    

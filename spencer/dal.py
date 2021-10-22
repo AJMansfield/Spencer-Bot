@@ -1,11 +1,12 @@
 
 from datetime import datetime
-from typing import Sequence, Union, Tuple
+from typing import Optional, Sequence, Union, Tuple
 from dataclasses import dataclass
 
 import sqlalchemy
 from sqlalchemy.future import select
-from sqlalchemy.sql.expression import Select, and_, or_, not_
+from sqlalchemy.sql.expression import Select, Update, and_, or_, not_
+from sqlalchemy import update
 import discord
 
 from spencer.models import Assignment, Expiry
@@ -35,13 +36,28 @@ class DAL():
         self.db_session.add(new_expiry)
         await self.db_session.flush()
     
-    async def get_ready_expiries(self, now: datetime):
-        q: Select = select(Expiry)
-        q = q.where(Expiry.when >= now)
+    async def complete_assignment_expiry(self, assignment: Assignment, user: discord.User):
+        q: Update = update(Expiry)
+        q = q.where(Expiry.assignment == assignment)
+        q = q.where(Expiry.user_id == user.id)
         q = q.where(not_(Expiry.complete))
+        q = q.values(complete = True)
+
+        q.execution_options(synchronize_session="fetch")
+        await self.db_session.execute(q)
+
+    async def get_next_expiry(self) -> Optional[Expiry]:
+        q: Select = select(Expiry)
+        q = q.where(not_(Expiry.complete))
+        q = q.order_by(Expiry.when.desc())
         result = await self.db_session.execute(q)
-        return result.scalars().all()
+        return result.scalars().first()
 
+    async def complete_expiry(self, expiry: Expiry):
+        q: Update = update(Expiry)
+        q = q.where(Expiry.id == expiry.id)
+        q = q.values(complete = True)
 
-
+        q.execution_options(synchronize_session="fetch")
+        await self.db_session.execute(q)
         
